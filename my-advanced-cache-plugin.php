@@ -10,6 +10,7 @@ if (!defined('ABSPATH')) exit;
 
 define('MACP_PLUGIN_FILE', __FILE__);
 define('MACP_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('MACP_VERSION', '1.3'); // Add version constant
 
 // Load Composer autoloader
 if (file_exists(MACP_PLUGIN_DIR . 'vendor/autoload.php')) {
@@ -28,6 +29,7 @@ class MACP_Plugin {
     private $redis;
     private $html_cache;
     private $admin;
+    private $cache_manager;
 
     public function __construct() {
         register_activation_hook(__FILE__, [$this, 'activate']);
@@ -36,6 +38,10 @@ class MACP_Plugin {
         $this->redis = new MACP_Redis();
         $this->html_cache = new MACP_HTML_Cache();
         $this->admin = new MACP_Admin($this->redis);
+        
+        // Initialize cache manager
+        require_once MACP_PLUGIN_DIR . 'includes/class-macp-cache-manager.php';
+        $this->cache_manager = new MACP_Cache_Manager($this->html_cache);
 
         $this->init_hooks();
         
