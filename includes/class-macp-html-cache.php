@@ -7,7 +7,7 @@ class MACP_HTML_Cache {
     private $excluded_urls;
 
     public function __construct() {
-        $this->cache_dir = MACP_PLUGIN_DIR . 'cache/';
+        $this->cache_dir = WP_CONTENT_DIR . '/cache/macp/';
         $this->excluded_urls = [
             'wp-login.php',
             'wp-admin',
@@ -29,18 +29,24 @@ class MACP_HTML_Cache {
     }
 
     private function ensure_cache_directory() {
-        if (MACP_Filesystem::ensure_directory($this->cache_dir)) {
-            // Create .htaccess to protect cache directory
-            $htaccess_file = $this->cache_dir . '.htaccess';
-            if (!file_exists($htaccess_file)) {
-                MACP_Filesystem::write_file($htaccess_file, "deny from all");
-            }
+        if (!MACP_Filesystem::ensure_directory($this->cache_dir)) {
+            MACP_Debug::log("Failed to create or access cache directory: " . $this->cache_dir);
+            return false;
         }
+        
+        // Create index.php for security
+        if (!file_exists($this->cache_dir . 'index.php')) {
+            MACP_Filesystem::write_file($this->cache_dir . 'index.php', '<?php // Silence is golden');
+        }
+        
+        return true;
     }
 
     public function should_cache_page() {
-        // Debug current request
-        MACP_Debug::log("Checking if page should be cached: " . $_SERVER['REQUEST_URI']);
+        if (!is_dir($this->cache_dir) || !is_writable($this->cache_dir)) {
+            MACP_Debug::log("Cache directory not writable: " . $this->cache_dir);
+            return false;
+        }
 
         if (is_admin()) {
             MACP_Debug::log("Not caching: Admin page");
@@ -52,13 +58,8 @@ class MACP_HTML_Cache {
             return false;
         }
 
-        if (is_search() || $_SERVER['REQUEST_METHOD'] === 'POST' || is_preview()) {
-            MACP_Debug::log("Not caching: Search/POST/Preview");
-            return false;
-        }
-
-        if (function_exists('is_woocommerce') && (is_cart() || is_checkout() || is_account_page())) {
-            MACP_Debug::log("Not caching: WooCommerce page");
+        if (is_search() || $_SERVER['REQUEST_METHOD'] !== 'GET' || is_preview()) {
+            MACP_Debug::log("Not caching: Search/Non-GET/Preview");
             return false;
         }
 
@@ -92,28 +93,32 @@ class MACP_HTML_Cache {
         $cache_file = $this->cache_dir . $cache_key . '.html';
         $cache_gzip = $this->cache_dir . $cache_key . '.html.gz';
 
-        MACP_Debug::log("Caching page to: " . $cache_file);
+        MACP_Debug::log("Processing page for cache: " . $url_path);
 
         // Add cache creation time comment
         $buffer = preg_replace('/(<\/html>)/i', '<!-- Cached by MACP on ' . current_time('mysql') . ' -->\n$1', $buffer);
       
-        // Check if minification options are enabled and apply minification
-    if (get_option('macp_minify_html', 0) || 
-        get_option('macp_minify_css', 0) || 
-        get_option('macp_minify_js', 0)) {
-        $minification = new MACP_Minification();
-        $buffer = $minification->process_output($buffer);
-    }
+        // Check if minification is enabled
+        if (get_option('macp_minify_html', 0)) {
+            MACP_Debug::log("Applying HTML minification");
+            $minification = new MACP_Minification();
+            $buffer = $minification->process_output($buffer);
+        }
 
         // Save uncompressed version
         if (!MACP_Filesystem::write_file($cache_file, $buffer)) {
-            MACP_Debug::log("Failed to write cache file");
+            MACP_Debug::log("Failed to write cache file: " . $cache_file);
             return $buffer;
         }
         
+        MACP_Debug::log("Successfully wrote cache file: " . $cache_file);
+        
         // Save gzipped version if enabled
         if (get_option('macp_enable_gzip', 1)) {
-            MACP_Filesystem::write_file($cache_gzip, gzencode($buffer, 9));
+            $gzipped = gzencode($buffer, 9);
+            if ($gzipped && MACP_Filesystem::write_file($cache_gzip, $gzipped)) {
+                MACP_Debug::log("Successfully wrote gzipped cache file");
+            }
         }
 
         return $buffer;

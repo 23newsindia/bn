@@ -11,11 +11,18 @@ if (!defined('ABSPATH')) exit;
 define('MACP_PLUGIN_FILE', __FILE__);
 define('MACP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 
+// Load Composer autoloader
+if (file_exists(MACP_PLUGIN_DIR . 'vendor/autoload.php')) {
+    require_once MACP_PLUGIN_DIR . 'vendor/autoload.php';
+}
+
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-debug.php';
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-filesystem.php';
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-redis.php';
+require_once MACP_PLUGIN_DIR . 'includes/class-macp-minification.php';
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-html-cache.php';
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-admin.php';
+require_once MACP_PLUGIN_DIR . 'includes/class-macp-debug-utility.php';
 
 class MACP_Plugin {
     private $redis;
@@ -37,11 +44,18 @@ class MACP_Plugin {
 
     public function activate() {
         MACP_Debug::log('Plugin activated');
-        MACP_Filesystem::ensure_directory(MACP_PLUGIN_DIR . 'cache');
         
+        // Create cache directory
+        $cache_dir = WP_CONTENT_DIR . '/cache/macp';
+        if (!file_exists($cache_dir)) {
+            wp_mkdir_p($cache_dir);
+        }
+        
+        // Set default options
         add_option('macp_enable_html_cache', 1);
         add_option('macp_enable_gzip', 1);
         add_option('macp_enable_redis', 1);
+        add_option('macp_minify_html', 0);
     }
 
     public function deactivate() {

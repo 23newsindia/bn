@@ -18,6 +18,16 @@ class MACP_Admin {
             'dashicons-performance',
             20
         );
+        
+        // Add debug page
+        add_submenu_page(
+            'macp_settings',
+            'Cache Debug',
+            'Debug Info',
+            'manage_options',
+            'macp_debug',
+            [$this, 'render_debug_page']
+        );
     }
 
     public function enqueue_admin_styles($hook) {
@@ -55,5 +65,14 @@ class MACP_Admin {
         ];
 
         include MACP_PLUGIN_DIR . 'templates/admin-page.php';
+    }
+
+    public function render_debug_page() {
+        if (!current_user_can('manage_options')) return;
+        
+        require_once MACP_PLUGIN_DIR . 'includes/class-macp-debug-utility.php';
+        $status = MACP_Debug_Utility::check_plugin_status();
+        
+        include MACP_PLUGIN_DIR . 'templates/debug-page.php';
     }
 }
